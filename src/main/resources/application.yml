@@ -23,6 +23,9 @@ spring:
                 - "openid"
                 - "profile"
             require-authorization-consent: true
+      resourceserver:
+        jwt:
+          audiences: test-audience
     user:
       name: user1
       password: password
