@@ -9,7 +9,7 @@
     </appender>
 
     <!-- LOG everything at INFO level -->
-    <root level="trace">
+    <root level="debug">
         <appender-ref ref="Console"/>
     </root>
 
