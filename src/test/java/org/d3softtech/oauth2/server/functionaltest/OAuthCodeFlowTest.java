@@ -14,6 +14,12 @@ import static org.springframework.http.HttpHeaders.ACCEPT;
 import static org.springframework.http.HttpHeaders.COOKIE;
 import static org.springframework.http.HttpHeaders.LOCATION;
 import static org.springframework.http.MediaType.TEXT_HTML_VALUE;
+import static org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CLIENT_ID;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CLIENT_SECRET;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CODE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.GRANT_TYPE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.REDIRECT_URI;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.net.URI;
@@ -34,6 +40,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationResponseType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -45,6 +52,12 @@ import org.springframework.web.reactive.function.BodyInserters;
 @SpringBootTest
 public class OAuthCodeFlowTest {
 
+    public static final String TOKEN_ENDPOINT = "/oauth2/token";
+    public static final String TEST_CLIENT_ID = "spring-test";
+    public static final String TEST_REDIRECT_URI = "https://127.0.0.1:9443/login/oauth2/code/spring";
+    public static final String AUTHORIZE_ENDPOINT = "/oauth2/authorize";
+    public static final String TEST_SCOPES = "openid profile email";
+    public static final String TEST_SECRET = "test-secret";
     private WebTestClient webTestClient;
 
     private static <T> String getCookie(EntityExchangeResult<T> bodyContentSpec, String existingCookie) {
@@ -71,7 +84,7 @@ public class OAuthCodeFlowTest {
     @Test
     void verifyTokenEndpoint() {
         webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/token").queryParam("grant_type", "client_credentials").build())
+            .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).queryParam("grant_type", "client_credentials").build())
             .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
             .expectStatus().isOk()
             .expectBody()
@@ -85,9 +98,11 @@ public class OAuthCodeFlowTest {
 
         //Initiate code flow with authorize endpoint
         EntityExchangeResult<byte[]> bodyContentSpec = webTestClient.get()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/authorize").queryParam("response_type", "code")
-                .queryParam("client_id", "spring-test").queryParam("scope", "openid profile email")
-                .queryParam("redirect_uri", "https://127.0.0.1:9443/login/oauth2/code/spring")
+            .uri(uriBuilder -> uriBuilder.path(AUTHORIZE_ENDPOINT)
+                .queryParam(OAuth2ParameterNames.RESPONSE_TYPE, OAuth2AuthorizationResponseType.CODE.getValue())
+                .queryParam(OAuth2ParameterNames.CLIENT_ID, TEST_CLIENT_ID)
+                .queryParam(OAuth2ParameterNames.SCOPE, TEST_SCOPES)
+                .queryParam(OAuth2ParameterNames.REDIRECT_URI, TEST_REDIRECT_URI)
                 .build())
             .header(ACCEPT, TEXT_HTML_VALUE)//Required to redirect to login page after 401 by Spring security
             .exchange()
@@ -132,16 +147,23 @@ public class OAuthCodeFlowTest {
 
         String finalDestinationPostOAuthLogin = newOAuthFlowResponse.getRedirectionLocation();
         //Checking finally redirected to client site to exchange for code
-        assertTrue(finalDestinationPostOAuthLogin.startsWith("https://127.0.0.1:9443/login/oauth2/code/spring?code="));
+        assertTrue(finalDestinationPostOAuthLogin.startsWith(TEST_REDIRECT_URI));
         //Let's exchange code for access and refresh token
         URIBuilder responseUriBuilder = new URIBuilder(finalDestinationPostOAuthLogin);
 
         log.info("The code received={}", responseUriBuilder.getFirstQueryParam("code").getValue());
-        Token token = webTestClient.post().uri(
-                uriBuilder -> uriBuilder.path("/oauth2/token").queryParam("grant_type", "authorization_code")
-                    .queryParam("code", responseUriBuilder.getFirstQueryParam("code").getValue())
-                    .queryParam("redirect_uri", "https://127.0.0.1:9443/login/oauth2/code/spring").build())
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret"))
+
+        //Exchange code for tokens
+        MultiValueMap<String, String> tokenRequestParams = new LinkedMultiValueMap<>();
+        tokenRequestParams.add(GRANT_TYPE, AUTHORIZATION_CODE.getValue());
+        tokenRequestParams.add(CODE, responseUriBuilder.getFirstQueryParam("code").getValue());
+        tokenRequestParams.add(REDIRECT_URI, TEST_REDIRECT_URI);
+        //Client credentials can be provided in different ways lets try with POST body form params
+        tokenRequestParams.add(CLIENT_ID,TEST_CLIENT_ID);
+        tokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
+        Token token = webTestClient.post().uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .body(BodyInserters.fromFormData(tokenRequestParams))
             .exchange().expectBody(Token.class).returnResult().getResponseBody();
         log.info("Tokens after successful login: {}", token);
         assertNotNull(token);
@@ -159,6 +181,7 @@ public class OAuthCodeFlowTest {
             .uri(uriBuilder -> uriBuilder.path("/oauth2/introspect").build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
             .body(BodyInserters.fromFormData(introspectionRequestParams))
+            //Client credentials can be provided in different ways lets try with Basic Auth
             .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
         log.info("RT Introspection response: {}", introspectionResponse);
@@ -179,7 +202,7 @@ public class OAuthCodeFlowTest {
         log.info("AT Introspection response: {}", introspectionResponse);
         //Refresh tokens
         MultiValueMap<String, String> refreshTokenRequestParams = new LinkedMultiValueMap<>();
-        refreshTokenRequestParams.add(OAuth2ParameterNames.GRANT_TYPE,
+        refreshTokenRequestParams.add(GRANT_TYPE,
             AuthorizationGrantType.REFRESH_TOKEN.getValue());
         refreshTokenRequestParams.add(OAuth2ParameterNames.REFRESH_TOKEN, token.refreshToken);
         refreshTokenRequestParams.add(OAuth2ParameterNames.SCOPE, "email");

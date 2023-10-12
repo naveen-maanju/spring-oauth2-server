@@ -43,4 +43,12 @@ Refer [OAuthCodeFlowTest](src/test/java/org/d3softtech/oauth2/server/functionalt
 Revoke endpoint will invalidate the token provided, but if the token is refresh_token then it will
 invalidate access_token and authorization_code also if not already invalidated.
 
+### Client Authentication
+
+Client authentication can be done using different methods:
+1. JWT 
+2. Basic Auth Credentials
+3. POST body form credentials
+4. PKCE
+
 ### NOTE: Run OAuth server to verify the test
