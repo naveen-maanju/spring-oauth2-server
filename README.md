@@ -48,7 +48,7 @@ To disable consent:
 1. Use scope ``openid`` only
 2. disable through configuration 
 ```yaml 
-require-authorization-consent: true
+require-authorization-consent: false
 ```
 
 ### Revoke
