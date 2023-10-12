@@ -2,6 +2,12 @@
 
 Authorization server for OAuth2
 
+RT: Refresh Token
+AT: Access Token
+
+Default RT life: 60min
+Default AT life: 5min
+
 Default AuthorizationGrantType:
 
 1. authorization_code
@@ -22,13 +28,19 @@ This branch shows how we can use code flow from a client. With
 4. Multiple JWT customizer based upon whom its being issued
 5. A functional test on verify the code flow
 
-Code flow in this POC include (Refer [OAuthCodeFlowTest](src/test/java/org/d3softtech/oauth2/server/functionaltest/OAuthCodeFlowTest.java)):
+Code flow in this POC include (
+Refer [OAuthCodeFlowTest](src/test/java/org/d3softtech/oauth2/server/functionaltest/OAuthCodeFlowTest.java)):
+
 1. Authorization flow initiation
 2. User Login
-3. User Consent 
+3. User Consent
 4. Introspection
 5. Refresh
 6. Revoke
 
+### Revoke
+
+Revoke endpoint will invalidate the token provided, but if the token is refresh_token then it will
+invalidate access_token and authorization_code also if not already invalidated.
 
 ### NOTE: Run OAuth server to verify the test
