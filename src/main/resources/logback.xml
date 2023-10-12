@@ -8,8 +8,11 @@
         </layout>
     </appender>
 
+    <logger name="org.springframework.security" level="trace" additivity="false">
+        <appender-ref ref="Console"/>
+    </logger>
     <!-- LOG everything at INFO level -->
-    <root level="trace">
+    <root level="INFO">
         <appender-ref ref="Console"/>
     </root>
 

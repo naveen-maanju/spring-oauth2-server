@@ -1,14 +1,18 @@
 server.port: 6060
 
+logging:
+  level:
+    org.springframework.security: trace
+
 spring:
   security:
     oauth2:
       authorizationserver:
         client:
-          oidc-client:
+          spring:
             registration:
               client-id: "spring-test"
-              client-secret: "{noop}test-secret" ##Use NoOpPasswordEncoder
+              client-secret: "sMJ1ltm5wxdcOeEJGaE6WdFj9ArR75wkBqUgVE7vwwo="  ##Using D3PasswordEncoder
               client-authentication-methods:
                 - "client_secret_basic"
               authorization-grant-types:
@@ -16,16 +20,26 @@ spring:
                 - "refresh_token"
                 - "client_credentials"
               redirect-uris:
-                - "http://127.0.0.1:8080/login/oauth2/code/oidc-client"
+                - "https://127.0.0.1:9443/"
+                - "https://127.0.0.1:9443/login/oauth2/code/spring"
               post-logout-redirect-uris:
                 - "http://127.0.0.1:8080/"
               scopes:
                 - "openid"
                 - "profile"
+                - "email"
             require-authorization-consent: true
       resourceserver:
         jwt:
           audiences: test-audience
-    user:
-      name: user1
-      password: password
+
+
+user:
+  details:
+    service:
+      base:
+        url: http://localhost:9080
+
+jwt:
+  private.key: classpath:d3softtech.key  #openssl pkey -in pkcs1.pem   |=>RSA to PKCS#8
+  public.key: classpath:d3softtech.pub   #openssl rsa -in d3softtech -pubout > d3softtech.pub     |=> to extract from RSA private key
