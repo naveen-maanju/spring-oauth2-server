@@ -15,11 +15,17 @@ import static org.springframework.http.HttpHeaders.COOKIE;
 import static org.springframework.http.HttpHeaders.LOCATION;
 import static org.springframework.http.MediaType.TEXT_HTML_VALUE;
 import static org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE;
+import static org.springframework.security.oauth2.core.AuthorizationGrantType.CLIENT_CREDENTIALS;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CLIENT_ID;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CLIENT_SECRET;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CODE;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.GRANT_TYPE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.PASSWORD;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.REDIRECT_URI;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.SCOPE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.STATE;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.TOKEN;
+import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.USERNAME;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.net.URI;
@@ -58,6 +64,10 @@ public class OAuthCodeFlowTest {
     public static final String AUTHORIZE_ENDPOINT = "/oauth2/authorize";
     public static final String TEST_SCOPES = "openid profile email";
     public static final String TEST_SECRET = "test-secret";
+    public static final String FORM_FIELD_ATTR_NAME = "name";
+    public static final String RETURN_ATTRIBUTE = "value";
+    public static final String INTROSPECT_ENDPOINT = "/oauth2/introspect";
+    public static final String REVOKE_ENDPOINT = "/oauth2/revoke";
     private WebTestClient webTestClient;
 
     private static <T> String getCookie(EntityExchangeResult<T> bodyContentSpec, String existingCookie) {
@@ -83,9 +93,16 @@ public class OAuthCodeFlowTest {
 
     @Test
     void verifyTokenEndpoint() {
+        MultiValueMap<String, String> tokenRequestParams = new LinkedMultiValueMap<>();
+        tokenRequestParams.add(GRANT_TYPE, CLIENT_CREDENTIALS.getValue());
+        tokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
+        tokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
+
         webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).queryParam("grant_type", "client_credentials").build())
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
+            .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .body(BodyInserters.fromFormData(tokenRequestParams))
+            .exchange()
             .expectStatus().isOk()
             .expectBody()
             .jsonPath("$.access_token").exists()
@@ -116,8 +133,8 @@ public class OAuthCodeFlowTest {
         String csrfToken = getCsrfToken(oAuthFlowResponse);
         EntityExchangeResult<byte[]> bodyContentLoginResponse = webTestClient.post().uri("/login")
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData("username", "Operator123")
-                .with("password", "P@ssw0rd").with("_csrf", csrfToken))
+            .body(BodyInserters.fromFormData(USERNAME, "Operator123")
+                .with(PASSWORD, "P@ssw0rd").with("_csrf", csrfToken))
             .headers(httpHeaders -> httpHeaders.add(COOKIE, oAuthFlowResponse.cookie))
             .exchange().expectStatus().isFound().expectBody().returnResult();
         OAuthFlowResponse newOAuthFlowResponse = from(bodyContentLoginResponse, oAuthFlowResponse.cookie);
@@ -126,17 +143,19 @@ public class OAuthCodeFlowTest {
         //If already authenticated consent response is stored and will not be rendered again until it gets invalidated
         if (newOAuthFlowResponse.httpStatus().isSameCodeAs(HttpStatus.OK)) { //Do consent if asked for
 
-            String clientId = getFormFieldValue(newOAuthFlowResponse, "name", "client_id", "value");
-            String state = getFormFieldValue(newOAuthFlowResponse, "name", "state", "value");
-            Set<String> scopes = getFormFieldValues(newOAuthFlowResponse, "name", "scope", "value");
+            String clientId = getFormFieldValue(newOAuthFlowResponse, FORM_FIELD_ATTR_NAME, CLIENT_ID,
+                RETURN_ATTRIBUTE);
+            String state = getFormFieldValue(newOAuthFlowResponse, FORM_FIELD_ATTR_NAME, STATE, RETURN_ATTRIBUTE);
+            Set<String> scopes = getFormFieldValues(newOAuthFlowResponse, FORM_FIELD_ATTR_NAME, SCOPE,
+                RETURN_ATTRIBUTE);
 
             MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-            formData.add("client_id", clientId);
-            formData.add("state", state);
-            scopes.forEach(scope -> formData.add("scope", scope));
+            formData.add(CLIENT_ID, clientId);
+            formData.add(STATE, state);
+            scopes.forEach(scope -> formData.add(SCOPE, scope));
 
             OAuthFlowResponse finalNewOAuthFlowResponse = newOAuthFlowResponse;
-            EntityExchangeResult<byte[]> consentSubmitResponse = webTestClient.post().uri("/oauth2/authorize")
+            EntityExchangeResult<byte[]> consentSubmitResponse = webTestClient.post().uri(AUTHORIZE_ENDPOINT)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(BodyInserters.fromFormData(formData))
                 .headers(httpHeaders -> httpHeaders.add(COOKIE, finalNewOAuthFlowResponse.cookie))
@@ -151,15 +170,15 @@ public class OAuthCodeFlowTest {
         //Let's exchange code for access and refresh token
         URIBuilder responseUriBuilder = new URIBuilder(finalDestinationPostOAuthLogin);
 
-        log.info("The code received={}", responseUriBuilder.getFirstQueryParam("code").getValue());
+        log.info("The code received={}", responseUriBuilder.getFirstQueryParam(CODE).getValue());
 
         //Exchange code for tokens
         MultiValueMap<String, String> tokenRequestParams = new LinkedMultiValueMap<>();
         tokenRequestParams.add(GRANT_TYPE, AUTHORIZATION_CODE.getValue());
-        tokenRequestParams.add(CODE, responseUriBuilder.getFirstQueryParam("code").getValue());
+        tokenRequestParams.add(CODE, responseUriBuilder.getFirstQueryParam(CODE).getValue());
         tokenRequestParams.add(REDIRECT_URI, TEST_REDIRECT_URI);
-        //Client credentials can be provided in different ways lets try with POST body form params
-        tokenRequestParams.add(CLIENT_ID,TEST_CLIENT_ID);
+        //Client credentials can be provided in different ways, lets try with POST body form params
+        tokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
         tokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
         Token token = webTestClient.post().uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -171,47 +190,50 @@ public class OAuthCodeFlowTest {
         assertNotNull(token.refreshToken);
         assertNotNull(token.idToken);
         assertNotNull(token.tokenType);
-        assertEquals("openid profile email", token.scope);
+        assertEquals(TEST_SCOPES, token.scope);
         assertEquals(299, token.expiresIn);
 
+        //Introspect RT
         MultiValueMap<String, String> introspectionRequestParams = new LinkedMultiValueMap<>();
-        introspectionRequestParams.add("token", token.refreshToken);
+        introspectionRequestParams.add(TOKEN, token.refreshToken);
 
         IntrospectionResponse introspectionResponse = webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/introspect").build())
+            .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
             .body(BodyInserters.fromFormData(introspectionRequestParams))
-            //Client credentials can be provided in different ways lets try with Basic Auth
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
+            //Client credentials can be provided in different ways, lets try with Basic Auth
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
         log.info("RT Introspection response: {}", introspectionResponse);
         assertNotNull(introspectionResponse);
         assertTrue(introspectionResponse.active);
         assertEquals("spring-test", introspectionResponse.clientId);
 
+        //Introspect AT
         introspectionRequestParams = new LinkedMultiValueMap<>();
-        introspectionRequestParams.add("token", token.accessToken);
-        introspectionRequestParams.add("token_type_hint", OAuth2ParameterNames.ACCESS_TOKEN);
-
+        introspectionRequestParams.add(TOKEN, token.accessToken);
+        introspectionRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
+        introspectionRequestParams.add(CLIENT_SECRET, TEST_SECRET);
         introspectionResponse = webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/introspect").build())
+            .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData(introspectionRequestParams))
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
+            .body(BodyInserters.fromFormData(introspectionRequestParams)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
         log.info("AT Introspection response: {}", introspectionResponse);
+
         //Refresh tokens
         MultiValueMap<String, String> refreshTokenRequestParams = new LinkedMultiValueMap<>();
         refreshTokenRequestParams.add(GRANT_TYPE,
             AuthorizationGrantType.REFRESH_TOKEN.getValue());
         refreshTokenRequestParams.add(OAuth2ParameterNames.REFRESH_TOKEN, token.refreshToken);
         refreshTokenRequestParams.add(OAuth2ParameterNames.SCOPE, "email");
+        refreshTokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
+        refreshTokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
 
         Token refreshedTokens = webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/token").build())
+            .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData(refreshTokenRequestParams))
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange().expectStatus()
+            .body(BodyInserters.fromFormData(refreshTokenRequestParams)).exchange().expectStatus()
             .isOk().expectBody(Token.class).returnResult().getResponseBody();
         log.info("Tokens after refresh: {}", refreshedTokens);
         assertNotNull(refreshedTokens);
@@ -220,22 +242,25 @@ public class OAuthCodeFlowTest {
         //Revoke tokens
         MultiValueMap<String, String> revokeTokensRequestParams = new LinkedMultiValueMap<>();
         revokeTokensRequestParams.add(OAuth2ParameterNames.TOKEN, refreshedTokens.refreshToken);
+        revokeTokensRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
+        revokeTokensRequestParams.add(CLIENT_SECRET, TEST_SECRET);
 
         webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/revoke").build())
+            .uri(uriBuilder -> uriBuilder.path(REVOKE_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData(revokeTokensRequestParams))
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange().expectStatus()
+            .body(BodyInserters.fromFormData(revokeTokensRequestParams)).exchange().expectStatus()
             .isOk().expectBody(Void.class);
 
         //Introspect again
         MultiValueMap<String, String> introspectionAgainRequestParams = new LinkedMultiValueMap<>();
-        introspectionAgainRequestParams.add("token", refreshedTokens.refreshToken);
+        introspectionAgainRequestParams.add(TOKEN, refreshedTokens.refreshToken);
+        introspectionAgainRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
+        introspectionAgainRequestParams.add(CLIENT_SECRET, TEST_SECRET);
+
         IntrospectionResponse revokeResponse = webTestClient.post()
-            .uri(uriBuilder -> uriBuilder.path("/oauth2/introspect").build())
+            .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData(introspectionAgainRequestParams))
-            .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
+            .body(BodyInserters.fromFormData(introspectionAgainRequestParams)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
 
         log.info("Introspection response post revoke: {}", revokeResponse);

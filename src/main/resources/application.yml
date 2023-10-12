@@ -15,6 +15,7 @@ spring:
               client-secret: "sMJ1ltm5wxdcOeEJGaE6WdFj9ArR75wkBqUgVE7vwwo="  ##Using D3PasswordEncoder
               client-authentication-methods:
                 - "client_secret_basic"
+                - "client_secret_post"
               authorization-grant-types:
                 - "authorization_code"
                 - "refresh_token"

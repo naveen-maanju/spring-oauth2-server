@@ -46,9 +46,12 @@ invalidate access_token and authorization_code also if not already invalidated.
 ### Client Authentication
 
 Client authentication can be done using different methods:
-1. JWT 
-2. Basic Auth Credentials
-3. POST body form credentials
-4. PKCE
+
+1. JWT - "client_secret_jwt"
+2. Basic Auth Credentials - "client_secret_basic"
+3. POST body form credentials - "client_secret_post"
+4. PKCE - "none"
+
+Client should be configured with allowed methods to support in OAuth server.
 
 ### NOTE: Run OAuth server to verify the test
