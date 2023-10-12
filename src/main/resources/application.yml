@@ -34,7 +34,6 @@ spring:
         jwt:
           audiences: test-audience
 
-
 user:
   details:
     service:

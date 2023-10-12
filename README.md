@@ -38,6 +38,19 @@ Refer [OAuthCodeFlowTest](src/test/java/org/d3softtech/oauth2/server/functionalt
 5. Refresh
 6. Revoke
 
+### User Consent 
+User consent is shown if:
+1. Enabled on configuration.<img src="./CONSENT-CONFIG.png">
+2. If scope is not only openid i.e. it will not be displayed if scope is only openid
+3. If Consent already done it will not be done again. 
+
+To disable consent:
+1. Use scope ``openid`` only
+2. disable through configuration 
+```yaml 
+require-authorization-consent: true
+```
+
 ### Revoke
 
 Revoke endpoint will invalidate the token provided, but if the token is refresh_token then it will
