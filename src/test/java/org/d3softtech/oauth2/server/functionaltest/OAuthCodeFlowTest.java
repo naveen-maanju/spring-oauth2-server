@@ -177,11 +177,11 @@ public class OAuthCodeFlowTest {
         tokenRequestParams.add(GRANT_TYPE, AUTHORIZATION_CODE.getValue());
         tokenRequestParams.add(CODE, responseUriBuilder.getFirstQueryParam(CODE).getValue());
         tokenRequestParams.add(REDIRECT_URI, TEST_REDIRECT_URI);
-        //Client credentials can be provided in different ways, lets try with POST body form params
-        tokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-        tokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
+
         Token token = webTestClient.post().uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            //Client credentials can be provided in different ways, lets try with Basic Auth. This is RECOMMENDED way.
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET))
             .body(BodyInserters.fromFormData(tokenRequestParams))
             .exchange().expectBody(Token.class).returnResult().getResponseBody();
         log.info("Tokens after successful login: {}", token);
@@ -201,7 +201,6 @@ public class OAuthCodeFlowTest {
             .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
             .body(BodyInserters.fromFormData(introspectionRequestParams))
-            //Client credentials can be provided in different ways, lets try with Basic Auth
             .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
         log.info("RT Introspection response: {}", introspectionResponse);
@@ -211,13 +210,12 @@ public class OAuthCodeFlowTest {
 
         //Introspect AT
         introspectionRequestParams = new LinkedMultiValueMap<>();
-        introspectionRequestParams.add(TOKEN, token.accessToken);
-        introspectionRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-        introspectionRequestParams.add(CLIENT_SECRET, TEST_SECRET);
+
         introspectionResponse = webTestClient.post()
             .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(BodyInserters.fromFormData(introspectionRequestParams)).exchange()
+            .body(BodyInserters.fromFormData(introspectionRequestParams))
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
         log.info("AT Introspection response: {}", introspectionResponse);
 
@@ -227,12 +225,11 @@ public class OAuthCodeFlowTest {
             AuthorizationGrantType.REFRESH_TOKEN.getValue());
         refreshTokenRequestParams.add(OAuth2ParameterNames.REFRESH_TOKEN, token.refreshToken);
         refreshTokenRequestParams.add(OAuth2ParameterNames.SCOPE, "email");
-        refreshTokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-        refreshTokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
 
         Token refreshedTokens = webTestClient.post()
             .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET))
             .body(BodyInserters.fromFormData(refreshTokenRequestParams)).exchange().expectStatus()
             .isOk().expectBody(Token.class).returnResult().getResponseBody();
         log.info("Tokens after refresh: {}", refreshedTokens);
@@ -242,24 +239,22 @@ public class OAuthCodeFlowTest {
         //Revoke tokens
         MultiValueMap<String, String> revokeTokensRequestParams = new LinkedMultiValueMap<>();
         revokeTokensRequestParams.add(OAuth2ParameterNames.TOKEN, refreshedTokens.refreshToken);
-        revokeTokensRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-        revokeTokensRequestParams.add(CLIENT_SECRET, TEST_SECRET);
 
         webTestClient.post()
             .uri(uriBuilder -> uriBuilder.path(REVOKE_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET))
             .body(BodyInserters.fromFormData(revokeTokensRequestParams)).exchange().expectStatus()
             .isOk().expectBody(Void.class);
 
         //Introspect again
         MultiValueMap<String, String> introspectionAgainRequestParams = new LinkedMultiValueMap<>();
         introspectionAgainRequestParams.add(TOKEN, refreshedTokens.refreshToken);
-        introspectionAgainRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-        introspectionAgainRequestParams.add(CLIENT_SECRET, TEST_SECRET);
 
         IntrospectionResponse revokeResponse = webTestClient.post()
             .uri(uriBuilder -> uriBuilder.path(INTROSPECT_ENDPOINT).build())
             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_SECRET))
             .body(BodyInserters.fromFormData(introspectionAgainRequestParams)).exchange()
             .expectBody(IntrospectionResponse.class).returnResult().getResponseBody();
 
@@ -276,8 +271,7 @@ public class OAuthCodeFlowTest {
         String loginForm = oAuthFlowResponse.getResponseBody();
         Document doc = Jsoup.parse(loginForm);
         Elements elements = doc.getElementsByAttributeValue("name", "_csrf");
-        String csrfToken = elements.get(0).attr("value");
-        return csrfToken;
+        return elements.get(0).attr("value");
     }
 
     private String getFormFieldValue(OAuthFlowResponse consentFormResponse, String key, String value,
