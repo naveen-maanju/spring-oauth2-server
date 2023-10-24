@@ -1,11 +1,13 @@
 server.port: 6060
-
+logging:
+  level:
+    org.springframework.security: trace
 spring:
   security:
     oauth2:
       authorizationserver:
         client:
-          oidc-client:
+          spring:
             registration:
               client-id: "spring-test"
               client-secret: "{noop}test-secret" ##Use NoOpPasswordEncoder
@@ -16,7 +18,7 @@ spring:
                 - "refresh_token"
                 - "client_credentials"
               redirect-uris:
-                - "http://127.0.0.1:8080/login/oauth2/code/oidc-client"
+                - "http://127.0.0.1:8080/login/oauth2/code/spring"
               post-logout-redirect-uris:
                 - "http://127.0.0.1:8080/"
               scopes:
