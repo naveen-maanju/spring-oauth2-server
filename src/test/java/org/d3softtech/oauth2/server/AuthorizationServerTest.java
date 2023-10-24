@@ -29,7 +29,6 @@ import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterN
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLDecoder;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
