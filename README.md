@@ -11,6 +11,6 @@ Test class have example on how we can provide additional claims in request and g
 
 ```mermaid
 graph TD;
-    OAuth2TokenEndpointFilter-->ProviderManager-->OAuth2ClientCredentialsAuthenticationProvider-->JwtGenerator-->OAuth2TokenCustomizer<JwtEncodingContext>;
+    OAuth2TokenEndpointFilter-->ProviderManager-->OAuth2ClientCredentialsAuthenticationProvider-->JwtGenerator-->OAuth2TokenCustomizer;
 ```
 
