@@ -15,10 +15,10 @@ public class D3PasswordEncoderTest {
 
     @Test
     void encode_ShouldEncodeThePassword_AndMatchWithEveryIteration() {
-        String password = "Password";
+        String password = "R3ferenc$";
         String hashedPassword = d3PasswordEncoder.encode(password);
         System.out.println(hashedPassword);
         assertNotEquals(password, hashedPassword);
-        assertEquals(hashedPassword, d3PasswordEncoder.encode("Password"));
+        assertEquals(hashedPassword, d3PasswordEncoder.encode("R3ferenc$"));
     }
 }
