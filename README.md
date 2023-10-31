@@ -67,4 +67,4 @@ Client authentication can be done using different methods:
 
 Client should be configured with allowed methods to support in OAuth server.
 
-### NOTE: Run OAuth server to verify the test
+## NOTE: Run OAuth server to verify the test
