@@ -1,6 +1,6 @@
 package org.d3softtech.oauth2.server.config;
 
-import org.d3softtech.oauth2.server.token.customizer.OAuth2JWTTokenCustomizerDelegate;
+import org.d3softtech.oauth2.server.token.customizer.OAuth2JWTTokenCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
@@ -12,7 +12,7 @@ public class AuthorizationServerConfiguration {
 
     @Bean
     protected OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer() {
-        return new OAuth2JWTTokenCustomizerDelegate();
+        return new OAuth2JWTTokenCustomizer();
     }
 
 

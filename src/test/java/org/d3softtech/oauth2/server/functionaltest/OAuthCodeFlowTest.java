@@ -16,6 +16,7 @@ import static org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.http.MediaType.TEXT_HTML;
 import static org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE;
+import static org.springframework.security.oauth2.core.OAuth2AccessToken.TokenType.BEARER;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CLIENT_ID;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.CODE;
 import static org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames.GRANT_TYPE;
@@ -46,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.apache.hc.core5.net.URIBuilder;
+import org.apache.shiro.authc.BearerToken;
 import org.d3softtech.oauth2.server.crypto.password.D3PasswordEncoder;
 import org.d3softtech.oauth2.server.service.D3UserDetailsService.D3User;
 import org.jsoup.Jsoup;
@@ -63,6 +65,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationResponseType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
@@ -74,6 +77,7 @@ import org.springframework.web.reactive.function.BodyInserters;
 @Slf4j
 @SpringBootTest
 public class OAuthCodeFlowTest {
+
 
   private static final JsonMapper JSON_MAPPER = new JsonMapper();
   public static final String TOKEN_ENDPOINT = "/oauth2/token";
@@ -94,6 +98,15 @@ public class OAuthCodeFlowTest {
   public static final String TEST_USER_SSN = "197611119877";
   public static final String TEST_USER_EMAIL = "test-user@d3softtech.com";
   public static final List<String> TEST_ROLES = List.of("admin", "user");
+
+  private static final D3User D3_USER_FROM_SERVICE = D3User.builder()
+      .userId(123)
+      .ssn(TEST_USER_SSN)
+      .email(TEST_USER_EMAIL)
+      .roles(TEST_ROLES)
+      .password("qsfVnea0xs/4FTGHSZKXtqSBgUj1ixw3hmv1YT5BsPU=")
+      .isPasswordChangeRequired(true)
+      .username(TEST_USER_NAME).build();
   private WebTestClient webTestClient;
 
   public static MockWebServer mockBackEnd;
@@ -391,6 +404,7 @@ public class OAuthCodeFlowTest {
         .exchange()
         .expectBody(OpaqueTokenIntrospectionResponse.class).returnResult().getResponseBody();
     log.info("AT Introspection response: {}", opaqueTokenIntrospectionResponse);
+    verifyOpaqueTokenIntrospectionClaims(opaqueTokenIntrospectionResponse);
 
     //Refresh tokens
     MultiValueMap<String, String> refreshTokenRequestParams = new LinkedMultiValueMap<>();
@@ -440,21 +454,30 @@ public class OAuthCodeFlowTest {
     assertEquals(0, revokeResponse.expireAt);
   }
 
+  private void verifyOpaqueTokenIntrospectionClaims(OpaqueTokenIntrospectionResponse opaqueTokenIntrospectionResponse) {
+    assertEquals(BEARER.getValue(), opaqueTokenIntrospectionResponse.tokenType);
+    assertEquals(TEST_REFERENCE_CLIENT_ID, opaqueTokenIntrospectionResponse.clientId);
+    assertEquals("http://localhost:6060", opaqueTokenIntrospectionResponse.issuer);
+    assertEquals(List.of("spring-reference"), opaqueTokenIntrospectionResponse.audience);
+    assertEquals("openid profile email", opaqueTokenIntrospectionResponse.scope);
+    assertEquals(TEST_USER_NAME, opaqueTokenIntrospectionResponse.subject);
+    assertEquals(D3_USER_FROM_SERVICE.userId(), opaqueTokenIntrospectionResponse.userId);
+    assertEquals(D3_USER_FROM_SERVICE.roles(), opaqueTokenIntrospectionResponse.roles);
+    assertEquals(D3_USER_FROM_SERVICE.ssn(), opaqueTokenIntrospectionResponse.ssn);
+    assertEquals(D3_USER_FROM_SERVICE.email(), opaqueTokenIntrospectionResponse.email);
+    assertEquals(D3_USER_FROM_SERVICE.isPasswordChangeRequired(),
+        opaqueTokenIntrospectionResponse.isPasswordChangeRequired);
+    assertTrue(opaqueTokenIntrospectionResponse.active);
+  }
+
   private void verifyAccessTokenIsReference(String accessToken) {
     assertFalse(accessToken.contains("."));
   }
 
   private void mockUserDetailsResponseFromUserDetailsService() throws JsonProcessingException {
-    D3User d3UserFromService = D3User.builder()
-        .userId(123)
-        .ssn(TEST_USER_SSN)
-        .email(TEST_USER_EMAIL)
-        .roles(TEST_ROLES)
-        .password(d3PasswordEncoder.encode("P@ssw0rd"))
-        .isPasswordChangeRequired(true)
-        .username(TEST_USER_NAME).build();
+
     mockBackEnd.enqueue(new MockResponse().setResponseCode(HttpStatus.OK.value())
-        .setBody(JSON_MAPPER.writeValueAsString(d3UserFromService))
+        .setBody(JSON_MAPPER.writeValueAsString(D3_USER_FROM_SERVICE))
         .addHeader("Content-Type", "application/json"));
   }
 
@@ -558,7 +581,10 @@ public class OAuthCodeFlowTest {
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   record OpaqueTokenIntrospectionResponse(boolean active, @JsonProperty("client_id") String clientId,
-                                          @JsonProperty("sub") String subject, @JsonProperty("scope") String scope,
+                                          @JsonProperty("sub") String subject,
+                                          Integer userId, String ssn, boolean isPasswordChangeRequired, String email,
+                                          String username, List<String> roles,
+                                          @JsonProperty("scope") String scope,
                                           @JsonProperty("iss") String issuer,
                                           @JsonProperty("aud") List<String> audience,
                                           @JsonProperty("token_type") String tokenType,
