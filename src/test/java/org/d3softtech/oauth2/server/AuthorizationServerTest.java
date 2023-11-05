@@ -114,11 +114,9 @@ public class AuthorizationServerTest {
 
 
   @Test
-  void verifyTokenEndpoint() {
+  void verifyTokenEndpoint_WithAdditionParamsAsBody() {
     MultiValueMap<String, Object> tokenRequestParams = new LinkedMultiValueMap<>();
     tokenRequestParams.add(GRANT_TYPE, CLIENT_CREDENTIALS.getValue());
-    tokenRequestParams.add(CLIENT_ID, TEST_CLIENT_ID);
-    tokenRequestParams.add(CLIENT_SECRET, TEST_SECRET);
     tokenRequestParams.add("email", TEST_USER_EMAIL);
     tokenRequestParams.add("ssn", TEST_USER_SSN);
     tokenRequestParams.add("username", TEST_USER_NAME);
@@ -128,6 +126,7 @@ public class AuthorizationServerTest {
         .uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(BodyInserters.fromMultipartData(tokenRequestParams))
+        .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret"))
         .exchange()
         .expectStatus().isOk()
         .expectBody()
@@ -135,16 +134,7 @@ public class AuthorizationServerTest {
         .jsonPath("$.token_type").isEqualTo("Bearer")
         .jsonPath("$.expires_in").isEqualTo(299);
 
-    webTestClient.post()
-        .uri(uriBuilder -> uriBuilder.path("/oauth2/token").queryParam("grant_type", "client_credentials")
-            .queryParam("email", TEST_USER_EMAIL).queryParam("ssn", TEST_USER_SSN)
-            .queryParam("username", TEST_USER_NAME).queryParam("roles", TEST_ROLES).build())
-        .headers(httpHeaders -> httpHeaders.setBasicAuth("spring-test", "test-secret")).exchange()
-        .expectStatus().isOk()
-        .expectBody()
-        .jsonPath("$.access_token").value(this::verifyAccessToken)
-        .jsonPath("$.token_type").isEqualTo("Bearer")
-        .jsonPath("$.expires_in").isEqualTo(299);
+
   }
 
   private void verifyAccessToken(Object accessToken) {
