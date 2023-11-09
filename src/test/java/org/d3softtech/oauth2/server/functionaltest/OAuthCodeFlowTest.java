@@ -218,12 +218,13 @@ public class OAuthCodeFlowTest {
     tokenRequestParams.add("username", TEST_USER_NAME);
     tokenRequestParams.addAll("roles", TEST_ROLES);
 
-    Token token = webTestClient.post().uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
+    Token token = null;
+    webTestClient.post().uri(uriBuilder -> uriBuilder.path(TOKEN_ENDPOINT).build())
         .contentType(APPLICATION_FORM_URLENCODED)
         //Client credentials can be provided in different ways, lets try with Basic Auth. This is RECOMMENDED way.
         .headers(httpHeaders -> httpHeaders.setBasicAuth(TEST_CLIENT_ID, TEST_CLIENT_SECRET))
         .body(BodyInserters.fromFormData(tokenRequestParams))
-        .exchange().expectBody(Token.class).returnResult().getResponseBody();
+        .exchange().expectBody().json("").returnResult().getResponseBody();
     log.info("Tokens after successful login: {}", token);
     assertNotNull(token);
     assertNotNull(token.accessToken);
